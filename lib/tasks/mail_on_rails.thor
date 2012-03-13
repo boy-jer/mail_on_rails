@@ -1,6 +1,5 @@
 class MailOnRails < Thor
   
-  require 'colorize'
   require 'mysql'
   include Thor::Actions
   
@@ -22,6 +21,7 @@ class MailOnRails < Thor
     dovecot(db_username, db_password, domain)
     aliases(domain)
     migrate
+    precompile
     
   end
   
@@ -150,8 +150,12 @@ class MailOnRails < Thor
   
   desc "migrate", "migrates the development and production databases for mail_on_rails"
   def migrate
-    run('rake db:migrate')
-    run('rake db:migrate RAILS_ENV=production')
+    run('bundle exec rake db:migrate')
+    run('bundle exec rake db:migrate RAILS_ENV=production')
+  end
+  
+  def precompile
+    run('bundle exec rake assets:precompile')
   end
   
 end

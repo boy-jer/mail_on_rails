@@ -21,6 +21,7 @@ class MailOnRails < Thor
     invoke :sasl
     invoke :dovecot
     invoke :aliases
+    invoke :migrate
     
   end
   
@@ -142,6 +143,11 @@ class MailOnRails < Thor
     append_file "/etc/aliases", "postmaster: root\nroot: postmaster@#{domain}"
     run('newaliases')
     run('service postfix restart')
+  end
+  
+  def migrate
+    run('rake db:migrate')
+    run('rake db:migrate RAILS_ENV=production')
   end
   
 end

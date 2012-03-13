@@ -1,7 +1,7 @@
 class MailOnRails < Thor
   
   require 'colorize'
-  require 'mysql2'
+  require 'mysql'
   include Thor::Actions
   
   desc "config", "asks a few questions and configures mail_on_rails"
@@ -13,15 +13,15 @@ class MailOnRails < Thor
     hostname = ask("What is the hostname for this machine?") unless hostname
     domain = ask("What is the domain name for this machine? ( include format, ex. domain.com )") unless domain
     
-    invoke :dependencies
-    invoke :database
-    invoke :user
-    invoke :postfix
-    invoke :ssl
-    invoke :sasl
-    invoke :dovecot
-    invoke :aliases
-    invoke :migrate
+    dependencies
+    database(db_username, db_password, root_password, socket)
+    user
+    postfix(db_username, db_password, domain, hostname)
+    ssl
+    sasl(db_username, db_password)
+    dovecot(db_username, db_password, domain)
+    aliases(domain)
+    migrate
     
   end
   
@@ -35,10 +35,10 @@ class MailOnRails < Thor
   def database(db_username = nil, db_password = nil, root_password = nil, socket = nil)
     root_password = ask("What is the root password for mysql on this system?") unless root_password
     socket = ask("Where is the mysql socket file located? ( full path, ex. /var/run/mysqld/mysqld.sock )") unless socket
-    db_username = ask("What should the name of the mail_on_rails mysql worker account be?")
-    db_password = ask("What should the password of the mail_on_rails mysql worker account be?")
+    db_username = ask("What should the name of the mail_on_rails mysql worker account be?") unless db_username
+    db_password = ask("What should the password of the mail_on_rails mysql worker account be?") unless db_password
     
-    sql = Mysql2::new("localhost", "root", "#{root_password}")
+    sql = Mysql::new("localhost", "root", "#{root_password}")
 
     sql.query(" CREATE USER '#{db_username}'@'localhost' IDENTIFIED BY '#{db_password}' ")
     sql.query(" CREATE DATABASE mail_on_rails_development ")
@@ -71,7 +71,10 @@ class MailOnRails < Thor
     create_file "/etc/postfix/mysql-virtual_forwardings.cf", "user = #{db_username}\npassword = #{db_password}\ndbname = mail_on_rails_production\nquery = SELECT destination FROM forwardings WHERE source='%s'\nhosts = 127.0.0.1"
     create_file "/etc/postfix/mysql-virtual_mailboxes.cf", "user = #{db_username}\npassword = #{db_password}\ndbname = mail_on_rails_production\nquery = SELECT CONCAT(SUBSTRING_INDEX(email,'@',-1),'/',SUBSTRING_INDEX(email,'@',1),'/') FROM users WHERE email='%s'\nhosts = 127.0.0.1"
     create_file "/etc/postfix/mysql-virtual_email2email.cf", "user = #{db_username}\npassword = #{db_password}\ndbname = mail_on_rails_production\nquery = SELECT email FROM users WHERE email='%s'\nhosts = 127.0.0.1"
-    chmod "/etc/postfix/mysql-virtual_*.cf", 0640
+    chmod "/etc/postfix/mysql-virtual_domains.cf", 0640
+    chmod "/etc/postfix/mysql-virtual_forwardings.cf", 0640
+    chmod "/etc/postfix/mysql-virtual_mailboxes.cf", 0640
+    chmod "/etc/postfix/mysql-virtual_email2email.cf", 0640
     run('chgrp postfix /etc/postfix/mysql-virtual_*.cf')
     
     run("postconf -e 'myhostname = #{hostname}.#{domain}'")
@@ -111,7 +114,7 @@ class MailOnRails < Thor
     db_username = ask("What is the mail_on_rails database worker username?") unless db_username
     db_password = ask("What is the mail_on_rails database worker password?") unless db_password
     empty_directory("/var/spool/postfix/var/run/saslauthd")
-    copy_file("/etc/default/saslauthd", "/etc/default/saslauthd.bak")
+#    copy_file("/etc/default/saslauthd", "/etc/default/saslauthd.bak") if File.exists?("/etc/default/saslauthd")
     create_file "/etc/default/saslauthd", "START=yes\nDESC=\"SASL Authentication Daemon\"\nNAME=\"saslauthd\"\nMECHANISMS=\"pam\"\nMECH_OPTIONS=\"\"\nTHREADS=5\nOPTIONS=\"-c -m /var/spool/postfix/var/run/saslauthd -r\""
     create_file "/etc/pam.d/smtp", "auth    required   pam_mysql.so user=#{db_username} passwd=#{db_password} host=127.0.0.1 db=mail_on_rails_production table=users usercolumn=email passwdcolumn=password crypt=1\naccount sufficient pam_mysql.so user=#{db_username} passwd=#{db_password} host=127.0.0.1 db=mail_on_rails_production table=users usercolumn=email passwdcolumn=password crypt=1"
     create_file "/etc/postfix/sasl/smtpd.conf", "pwcheck_method: saslauthd\nmech_list: plain login\nallow_plaintext: true\nauxprop_plugin: mysql\nsql_hostnames: 127.0.0.1\nsql_user: #{db_username}\nsql_passwd: #{db_password}\nsql_database: mail_on_rails_production\nsql_select: select password from users where email = '%u'"
@@ -128,9 +131,9 @@ class MailOnRails < Thor
     db_password = ask("What is the mail_on_rails database worker password?") unless db_password
     domain = ask("What is the domain name for this machine? ( include format, ex. domain.com )") unless domain
     append_file "/etc/postfix/master.cf", "dovecot   unix  -       n       n       -       -       pipe\n\tflags=DRhu user=mail_on_rails:mail_on_rails argv=/usr/lib/dovecot/deliver -d ${recipient}"
-    copy_file "/etc/dovecot/dovecot.conf", "/etc/dovecot/dovecot.conf.bak"
+#    copy_file "/etc/dovecot/dovecot.conf", "/etc/dovecot/dovecot.conf.bak"
     create_file "/etc/dovecot/dovecot.conf", "protocols = imap imaps pop3 pop3s\nlog_timestamp = \"\%Y-\%m-\%d \%H:\%M:\%S \"\nmail_location = maildir:/home/mail_on_rails/\%d/\%n/Maildir\n\nssl_cert_file = /etc/ssl/certs/dovecot.pem\nssl_key_file = /etc/ssl/private/dovecot.pem\n\nnamespace private {\n    separator = .\n    prefix = INBOX.\n    inbox = yes\n}\n\nprotocol lda {\n    log_path = /home/mail_on_rails/dovecot-deliver.log\n    auth_socket_path = /var/run/dovecot/auth-master\n    postmaster_address = postmaster@#{domain}\n    mail_plugins = sieve\n    global_script_path = /home/mail_on_rails/globalsieverc\n}\n\nprotocol pop3 {\n    pop3_uidl_format = \%08Xu\%08Xv\n}\n\nauth default {\n    user = root\n\n    passdb sql {\n        args = /etc/dovecot/dovecot-sql.conf\n    }\n\n    userdb static {\n        args = uid=5000 gid=5000 home=/home/mail_on_rails/\%d/\%n allow_all_users=yes\n    }\n\n    socket listen {\n        master {\n            path = /var/run/dovecot/auth-master\n            mode = 0600\n            user = mail_on_rails\n        }\n\n        client {\n            path = /var/spool/postfix/private/auth\n            mode = 0660\n            user = postfix\n            group = postfix\n        }\n    }\n}"
-    copy_file "/etc/dovecot/dovecot-sql.conf", "/etc/dovecot/dovecot-sql.conf.bak"
+#    copy_file "/etc/dovecot/dovecot-sql.conf", "/etc/dovecot/dovecot-sql.conf.bak"
     create_file "/etc/dovecot/dovecot-sql.conf", "driver = mysql\nconnect = host=127.0.0.1 dbname=mail_on_rails_production user=#{db_username} password=#{db_password}\ndefault_pass_scheme = CRYPT\npassword_query = SELECT email as user, password FROM users WHERE email='%u';"
     run('service dovecot restart')
     run('chgrp mail_on_rails /etc/dovecot/dovecot.conf')
@@ -145,6 +148,7 @@ class MailOnRails < Thor
     run('service postfix restart')
   end
   
+  desc "migrate", "migrates the development and production databases for mail_on_rails"
   def migrate
     run('rake db:migrate')
     run('rake db:migrate RAILS_ENV=production')

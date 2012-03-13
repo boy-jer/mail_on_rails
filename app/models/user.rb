@@ -26,7 +26,11 @@ class User < ActiveRecord::Base
     db = Mysql2::Client.new(:host => 'localhost', :username => config[Rails.env]["username"].to_s, :password => config[Rails.env]["password"].to_s, :database => config[Rails.env]["database"].to_s)
     r = db.query("SELECT ENCRYPT('#{new_password}', '#{self.username}')")
     r.first.each_value do |x|
-      self.update_attributes(:password => x)
+      if self.new_record?
+        self.password = x
+      else
+        self.update_attributes(:password => x)
+      end
     end
   end
   

@@ -1,0 +1,27 @@
+<h1><%= @user.email %></h1>
+
+<% if flash[:notice] %>
+	<%= flash[:notice] %>
+<% end %>
+
+<%= form_tag set_password_path do %>
+	<p>
+		<%= label_tag :password %><br />
+		<%= password_field_tag 'password' %>
+	</p>
+	<p>
+		<%= label_tag :new_password %><br />
+		<%= password_field_tag 'new_password' %>
+	</p>
+	<p>
+		<%= label_tag :confirm_new_password %><br />
+		<%= password_field_tag 'new_password_confirmation' %>
+	</p>
+	
+	<%= hidden_field_tag 'id', @user.id %>
+	
+	<%= submit_tag 'Change Password' %>
+	
+<% end %>
+
+If you forgot your current password, and want a random reset sent to your back email, <%= link_to 'click here', set_random_password_path(:id => @user.id) %>.

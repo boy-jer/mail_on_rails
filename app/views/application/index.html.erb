@@ -1,0 +1,7 @@
+<% @users = User.all %>
+
+<% @users.each do |user| %>
+
+	<%= link_to "reset", set_password_path(:id => user.id) %>
+	
+<% end %>

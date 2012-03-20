@@ -1,23 +1,12 @@
-<h1>Listing domains</h1>
-
-<table>
-  <tr>
-    <th>Domain</th>
-    <th></th>
-    <th></th>
-    <th></th>
-  </tr>
-
 <% @domains.each do |domain| %>
-  <tr>
-    <td><%= domain.domain %></td>
-    <td><%= link_to 'Show', domain %></td>
-    <td><%= link_to 'Edit', edit_domain_path(domain) %></td>
-    <td><%= link_to 'Destroy', domain, confirm: 'Are you sure?', method: :delete %></td>
-  </tr>
+
+	<div id="<%=domain.domain%>" class="domain">
+		<div class="domain_title">
+			<%= link_to domain.domain, domain %>
+		</div>
+		<div class="domain_information">
+			Email Addresses: <%= domain.users.count %>
+		</div>
+	</div>
+	
 <% end %>
-</table>
-
-<br />
-
-<%= link_to 'New Domain', new_domain_path %>

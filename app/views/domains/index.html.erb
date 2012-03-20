@@ -4,9 +4,12 @@
 		<div class="domain_title">
 			<%= link_to domain.domain, domain %>
 		</div>
-		<div class="domain_information">
-			Email Addresses: <%= domain.users.count %>
-		</div>
+		
+		<% domain.users.each do |user| %>
+			<%= user.email %>
+			<%= user.backup_email%>
+			<%= link_to 'Remove User', user, confirm: 'Are you sure? This will permanently delete this user account.', method: :delete %>
+		<% end %>
 	</div>
 	
 <% end %>

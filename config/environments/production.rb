@@ -9,9 +9,7 @@ MailOnRails::Application.configure do
   config.action_controller.perform_caching = true
 
   # Disable Rails's static asset server (Apache or nginx will already do this)
-  # testing with WEBrick in production mode, turn this off if you plan on actually using WEBrick for production mode
-  # (using WEBrick for production is frowned upon...)
-  config.serve_static_assets = true
+  config.serve_static_assets = false
 
   # Compress JavaScripts and CSS
   config.assets.compress = true

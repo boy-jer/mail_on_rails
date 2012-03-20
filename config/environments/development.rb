@@ -34,4 +34,7 @@ MailOnRails::Application.configure do
 
   # Expands the lines which load the assets
   config.assets.debug = true
+  
+  #for the love of god stop serving precompiled assets in development mode
+  config.serve_static_assets = false
 end
